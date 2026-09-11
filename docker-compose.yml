@@ -1,0 +1,9 @@
+services:
+  meting-api:
+    image: ghcr.io/xiemuhou/wordpress-music-api:latest
+    container_name: meting-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${PUBLIC_PORT:-9400}:80"
