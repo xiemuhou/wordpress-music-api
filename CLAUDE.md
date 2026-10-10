@@ -18,12 +18,15 @@ bun run start
 # 代码检查(oxlint)
 bun run lint
 
+# Cookie 热更新与缓存回归测试
+bun run test
+
 # Docker 构建与运行
 docker build -t meting-api .
 docker run -p 80:80 -e METING_URL=https://example.com -e METING_TOKEN=secret meting-api
 ```
 
-项目没有测试套件。
+回归测试位于 `test/`，使用 `node:test`；也可执行 `node --test`。
 
 ## 技术栈
 
@@ -60,7 +63,7 @@ Bun.serve → CORS 处理 → logger 中间件 → error 中间件 → router �
 | `src/service/demo.js` | 返回嵌入 APlayer + Meting.js 的 HTML 演示页 |
 | `src/middleware/logger.js` | 请求日志:生成 requestId,记录响应时间和状态码 |
 | `src/middleware/errors.js` | 统一异常捕获,通过 `x-error-message` 响应头传递错误信息 |
-| `src/utils/cookie.js` | Cookie 读取(环境变量优先,文件次之),5分钟缓存,referrer 白名单校验 |
+| `src/utils/cookie.js` | Cookie 读取(环境变量优先,文件次之),文件每次请求读取,referrer 白名单校验 |
 | `src/utils/http-exception.js` | 自定义 HTTPException 类(status + message） |
 | `src/utils/lyric.js` | LRC 歌词解析,原文与翻译按时间轴合并,格式: `原文 (翻译)` |
 
@@ -77,6 +80,7 @@ LRU 缓存(lru-cache),最多 1000 条,默认 TTL 30 秒:
 - url 类型: 10 分钟
 - 其他类型: 1 小时
 - 缓存未命中时设置 `x-cache: miss` 响应头
+- 缓存键包含当前使用的 Cookie 的 SHA-256 摘要，替换 Cookie 后不复用旧结果；无 Cookie 的请求独立缓存。
 
 ### URL 转换逻辑（`src/service/api.js:83-111`）
 
@@ -90,6 +94,8 @@ LRU 缓存(lru-cache),最多 1000 条,默认 TTL 30 秒:
 Cookie 支持两种来源（优先级从高到低）:
 1. 环境变量 `METING_COOKIE_{SERVER}`（如 `METING_COOKIE_NETEASE`）
 2. 文件系统 `./cookie/{server}`
+
+Compose 将宿主机 `./cookie` 只读挂载到 `/app/cookie`。Cookie 文件更新在下一次请求生效；环境变量更新需要重建容器。本项目不负责平台登录或 Cookie 自动续期。
 
 通过 `METING_COOKIE_ALLOW_HOSTS` 限制哪些 referrer 来源可使用 Cookie。
 
