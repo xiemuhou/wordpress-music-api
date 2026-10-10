@@ -1,5 +1,5 @@
 import Meting from '@meting/core'
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { HTTPException } from '../utils/http-exception.js'
 import config from '../config.js'
 import { format as lyricFormat } from '../utils/lyric.js'
@@ -46,20 +46,19 @@ export default async (request, ctx) => {
   }
 
   // 4. 调用 API
-  const cacheKey = `${server}/${type}/${id}`
+  // 在查询缓存前读取当前 Cookie。凭证变化后使用新缓存，匿名请求也独立缓存。
+  const referrer = request.headers.get('referer')
+  const cookie = isAllowedHost(referrer) ? await readCookieFile(server) : ''
+  const cookieHash = createHash('sha256').update(cookie).digest('hex')
+  const cacheKey = `${server}/${type}/${id}/${cookieHash}`
   let data = cache.get(cacheKey)
   if (data === undefined) {
     ctx.responseHeaders.set('x-cache', 'miss')
     const meting = new Meting(server)
     meting.format(true)
 
-    // 检查 referrer 并配置 cookie
-    const referrer = request.headers.get('referer')
-    if (isAllowedHost(referrer)) {
-      const cookie = await readCookieFile(server)
-      if (cookie) {
-        meting.cookie(cookie)
-      }
+    if (cookie) {
+      meting.cookie(cookie)
     }
 
     const method = METING_METHODS[type]
